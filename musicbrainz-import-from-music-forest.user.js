@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MusicBrainz Import from Music Forest
 // @namespace    https://github.com/y-young
-// @version      2024.5.5
+// @version      2026.2.5
 // @description  Import releases from Music Forest into MusicBrainz.
 // @author       y-young
 // @licence      MIT; https://opensource.org/licenses/MIT
@@ -12,13 +12,15 @@
 // @icon         https://www.minc.or.jp/favicon.ico
 // @require      https://cdn.jsdelivr.net/gh/murdos/musicbrainz-userscripts@e84565918e728252753a6e24d350b995dfae2953/lib/mbimport.js
 // @grant        GM_registerMenuCommand
+// @grant        GM_openInTab
 // ==/UserScript==
 
 /*
  * Usage:
  *   Open a modal that contains release information,
  *   find "MusicBrainz Import from Music Forest" in right-click menu
- *   and click "Import into MusicBrainz".
+ *   and click "Import into MusicBrainz",
+ *   or click "Import into MB" button in the modal.
  *
  * Things to check before submission:
  *   - Album language and script type, default to "Japanese"
@@ -122,7 +124,7 @@ function parseTrackList(trackList) {
     const tracks = [];
     rows.forEach((row) => {
         const cols = Array.from(row.children).map((col, index) =>
-            index === 5 ? col.innerHTML : col.innerText
+            index === 5 ? col.innerHTML : col.innerText,
         );
         const medly = cols[1];
         // Skip parts of a medly, e.g: JECN-358/9
@@ -145,9 +147,13 @@ function parseTrackList(trackList) {
 
 function resolveReleaseArtist(catno) {
     const rows = Array.from(
-        document.querySelectorAll("table#cd-list tr:not(.header)")
+        document.querySelectorAll("table#cd-list tr:not(.header)"),
     );
+    // No CD list on song/work search page
     const row = rows.find((row) => row.children[1].innerText.trim() === catno);
+    if (!row) {
+        return [];
+    }
     return parseArtistCredit(row.children[4].innerText);
 }
 
@@ -160,7 +166,7 @@ function parseModalContent() {
 
     const title = modal.querySelector("h4.modal-title").innerText;
     const metaItems = Array.from(
-        modal.querySelectorAll("div.detail_data div.col-sm-3")
+        modal.querySelectorAll("div.detail_data div.col-sm-3"),
     ).map((item) => item.innerText);
     const catno = metaItems[0].substr(3);
     const labels = parseCatNo(catno);
@@ -169,7 +175,7 @@ function parseModalContent() {
     const artist_credit = resolveReleaseArtist(catno);
 
     const discFormats = modal.querySelectorAll(
-        "div.disk_data div.col-sm-2:first-child"
+        "div.disk_data div.col-sm-2:first-child",
     );
     const trackLists = modal.querySelectorAll("table.cd-detail2-track-list");
     const discs = [];
@@ -198,10 +204,22 @@ function parseModalContent() {
     return release;
 }
 
-function importToMB() {
+function getModalSlot() {
+    const modal = document.querySelector("div#cd_detail");
+    return modal.querySelector("div.modal-body button.description-of-cd-detail")
+        .parentNode;
+}
+
+function createImportToMBButton() {
     const release = parseModalContent();
     if (!release) {
         return;
+    }
+    const id = "import-to-mb";
+    const slot = getModalSlot();
+    const existing = slot.querySelector("div#" + id);
+    if (existing) {
+        return existing;
     }
     const note = `
 
@@ -211,15 +229,24 @@ Imported from Music Forest using https://github.com/y-young/userscripts#import-f
     const parameters = MBImport.buildFormParameters(release, note);
     const formHtml = MBImport.buildFormHTML(parameters);
     const form = document.createElement("div");
-    form.className = "clearfix";
-    form.style.display = "none";
+    form.id = id;
+    form.style = "display: inline; margin-left: 10px";
     form.innerHTML = formHtml;
-    const modal = document.querySelector("div#cd_detail");
-    modal.querySelector("div.modal-body").prepend(form);
+    form.querySelector("form").style = "display: inline;";
+    form.querySelector("button").className = "btn btn-warning";
+    slot.appendChild(form);
+    return form;
+}
+
+function importToMB() {
+    const form = createImportToMBButton();
+    if (!form) {
+        return;
+    }
     form.querySelector("button[type='submit']").click();
 }
 
-function submitISRCs() {
+function buildISRCSubmissionLink() {
     const release = parseModalContent();
     if (!release) {
         return;
@@ -230,7 +257,49 @@ function submitISRCs() {
             params.append(`isrc${discIndex + 1}-${trackIndex + 1}`, track.isrc);
         });
     });
-    window.open("https://magicisrc.kepstin.ca/?" + params.toString());
+    return "https://magicisrc.kepstin.ca/?" + params.toString();
+}
+
+function createISRCSubmissionButton() {
+    const link = buildISRCSubmissionLink();
+    if (!link) {
+        return;
+    }
+    const element = document.createElement("a");
+    element.className = "btn btn-info";
+    element.href = link;
+    element.target = "_blank";
+    element.innerText = "Submit ISRCs";
+    element.rel = "noopener";
+    element.style = "margin-left: 10px";
+    const slot = getModalSlot();
+    slot.appendChild(element);
+}
+
+function submitISRCs() {
+    const link = buildISRCSubmissionLink();
+    if (!link) {
+        return;
+    }
+    GM_openInTab(link);
+}
+
+const modal = document.querySelector("div#cd_detail");
+if (modal) {
+    const observer = new MutationObserver(() => {
+        const isVisible = modal.classList.contains("in");
+        if (isVisible) {
+            setTimeout(() => {
+                createImportToMBButton();
+                createISRCSubmissionButton();
+            }, 700);
+        }
+    });
+
+    observer.observe(modal, {
+        attributes: true,
+        attributeFilter: ["class"],
+    });
 }
 
 GM_registerMenuCommand("Import into MusicBrainz", importToMB);
