@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MusicBrainz Artist Credits Helper
 // @namespace    https://github.com/y-young/userscripts
-// @version      2024.5.5
+// @version      2026.2.11
 // @description  Split and fill artist credits, append character voice actor credit, and guess artists from track titles.
 // @author       y-young
 // @license      MIT; https://opensource.org/licenses/MIT
@@ -9,6 +9,7 @@
 // @downloadURL  https://github.com/y-young/userscripts/raw/master/musicbrainz-artist-credits-helper.user.js
 // @match        https://*.musicbrainz.org/release/*/edit
 // @match        https://*.musicbrainz.org/release/add*
+// @match        https://*.musicbrainz.org/recording/create*
 // @icon         https://musicbrainz.org/static/images/favicons/apple-touch-icon-72x72.png
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -17,7 +18,7 @@
 
 "use strict";
 
-const CLIENT = "Artist Credits Helper/2024.5.5(https://github.com/y-young)";
+const CLIENT = "Artist Credits Helper/2026.2.11(https://github.com/y-young)";
 // Default values
 const CV_JOIN_PHRASES = [" (CV ", ")"];
 const SEPARATOR = ",";
@@ -25,7 +26,7 @@ const SEPARATOR = ",";
 const TRACK_ARTIST_PATTERN =
     /(?<=\s\(?)([^\w\s\(]{1,3} ?\S{1,3})\s?(?=Ver|Remix|ソロ)/i;
 const JOIN_PHRASE_PATTERN =
-    /\s*(?:[\(（]CV[\.:： ]?|[\)）]\s*[,，、・]?|\s(?:featuring|feat|ft|vs)[\.\s]|,|，|、|&|・)\s*/gi;
+    /\s*(?:[\(（]CV[\.:： ]?|[\)）]\s*[,，、・]?|\s(?:featuring|feat|ft|vs)[\.\s]|,|，|、|&|・|×)\s*/gi;
 
 const ENABLE_GUESS_TRACK_ARTISTS = true;
 const ENABLE_APPEND_CHARACTER_CV = true;
@@ -58,7 +59,7 @@ function setInputValue(input, value) {
     // https://stackoverflow.com/questions/23892547/what-is-the-best-way-to-trigger-onchange-event-in-react-js
     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
         window.HTMLInputElement.prototype,
-        "value"
+        "value",
     ).set;
     nativeInputValueSetter.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -94,11 +95,11 @@ class ArtistCreditsEditor {
      */
     getInputs(sliceIndex = 0) {
         const inputs = Array.from(
-            this.#bubble.querySelectorAll("input[type=text]")
+            this.#bubble.querySelectorAll("input[type=text]"),
         );
         const SIZE = 3;
         return Array.from(new Array(Math.ceil(inputs.length / SIZE)), (_, i) =>
-            inputs.slice(i * SIZE, i * SIZE + SIZE)
+            inputs.slice(i * SIZE, i * SIZE + SIZE),
         )
             .slice(sliceIndex)
             .map((input) => ({
@@ -123,7 +124,7 @@ class ArtistCreditsEditor {
         setTimeout(() => {
             inputs = this.getInputs();
             credits.forEach((credit, index) =>
-                this.updateInputs(inputs[index], credit)
+                this.updateInputs(inputs[index], credit),
             );
         }, 30);
     }
@@ -151,7 +152,7 @@ class ArtistCreditsEditor {
             return;
         }
         const oldCredit = Object.fromEntries(
-            Object.entries(inputs).map(([key, value]) => [key, value.value])
+            Object.entries(inputs).map(([key, value]) => [key, value.value]),
         );
         const newCredit = updater(oldCredit);
         this.updateInputs(inputs, newCredit);
@@ -192,8 +193,8 @@ async function getVoiceActor(characterMBID) {
                     (relation) =>
                         relation["type-id"] === RELATIONSHIP_ID &&
                         relation.direction === "backward" &&
-                        !relation.ended
-                )?.artist.id ?? alert("No voice actor relationship found.")
+                        !relation.ended,
+                )?.artist.id ?? alert("No voice actor relationship found."),
         );
 }
 
@@ -216,7 +217,7 @@ function getCharacterMBID(characterName) {
             }
             const gid = link.href.split("/artist/")[1];
             return { name, gid };
-        }
+        },
     );
     return (
         artists?.find((artist) => artist.name === characterName)?.gid ??
@@ -264,11 +265,11 @@ function setCVJoinPhrases() {
     const config = getCVJoinPhrases();
     const phrase1 = prompt(
         `Enter the first part of join phrases:`,
-        config.joinPhrases[0]
+        config.joinPhrases[0],
     );
     const phrase2 = prompt(
         `Enter the second part of join phrases:`,
-        config.joinPhrases[1]
+        config.joinPhrases[1],
     );
     const separator = prompt(`Enter the separator:`, config.separator);
     GM_setValue("cv_join_phrases", {
@@ -355,7 +356,7 @@ function parseArtistCredits() {
     const acString = editor.getInputs()[0]?.artist?.value;
     if (!acString) {
         alert(
-            "Please enter the artist credits to parse in the first input box."
+            "Please enter the artist credits to parse in the first input box.",
         );
         return;
     }
@@ -377,13 +378,13 @@ function initBubbleTools() {
         if (ENABLE_APPEND_CHARACTER_CV) {
             const appendButton = createButton(
                 "Append Character CV",
-                appendCharacterCV
+                appendCharacterCV,
             );
             container.appendChild(appendButton);
         }
         const parseButton = createButton(
             "Parse Artist Credits",
-            parseArtistCredits
+            parseArtistCredits,
         );
         container.appendChild(parseButton);
     };
@@ -410,7 +411,7 @@ function initTrackTools() {
         .forEach((trackList, index) => {
             const button = createButton(
                 "Guess artist from track titles",
-                guessTrackArtists
+                guessTrackArtists,
             );
             button.dataset.index = index;
             trackList.querySelector("div.buttons").appendChild(button);
