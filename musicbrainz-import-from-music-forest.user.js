@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MusicBrainz Import from Music Forest
 // @namespace    https://github.com/y-young
-// @version      2026.2.5
+// @version      2026.2.11
 // @description  Import releases from Music Forest into MusicBrainz.
 // @author       y-young
 // @licence      MIT; https://opensource.org/licenses/MIT
@@ -265,14 +265,20 @@ function createISRCSubmissionButton() {
     if (!link) {
         return;
     }
+    const id = "submit-isrc";
+    const slot = getModalSlot();
+    const existing = slot.querySelector("a#" + id);
+    if (existing) {
+        return;
+    }
     const element = document.createElement("a");
+    element.id = id;
     element.className = "btn btn-info";
     element.href = link;
     element.target = "_blank";
     element.innerText = "Submit ISRCs";
     element.rel = "noopener";
     element.style = "margin-left: 10px";
-    const slot = getModalSlot();
     slot.appendChild(element);
 }
 
@@ -286,13 +292,16 @@ function submitISRCs() {
 
 const modal = document.querySelector("div#cd_detail");
 if (modal) {
+    let intervalId = 0;
     const observer = new MutationObserver(() => {
         const isVisible = modal.classList.contains("in");
         if (isVisible) {
-            setTimeout(() => {
+            intervalId = setInterval(() => {
                 createImportToMBButton();
                 createISRCSubmissionButton();
             }, 700);
+        } else if (intervalId > 0) {
+            clearInterval(intervalId);
         }
     });
 
